@@ -56,12 +56,29 @@ func shot(plate: Plate?, dark: Bool, name: String) {
         NSColor(white: dark ? 0.11 : 0.96, alpha: 1).setFill()
         NSRect(x: 0, y: 0, width: W, height: H).fill()
         scene.draw(in: NSRect(x: 0, y: 0, width: W, height: H))
-        // plate picker mock
-        let pickerText = NSAttributedString(string: "‹  ›    \(plate.map { "\($0.index + 1). \($0.name)" } ?? "All plates")  ⌄",
+        // plate picker mock: ‹ › stepper + popup with a vertically centered chevron
+        func symbol(_ name: String, _ size: CGFloat) -> NSImage {
+            let cfg = NSImage.SymbolConfiguration(pointSize: size, weight: .semibold)
+            let sym = NSImage(systemSymbolName: name, accessibilityDescription: nil)!.withSymbolConfiguration(cfg)!
+            return NSImage(size: sym.size, flipped: false) { r in
+                sym.draw(in: r); NSColor.labelColor.set(); r.fill(using: .sourceIn); return true
+            }
+        }
+        let title = NSAttributedString(string: plate.map { "\($0.index + 1). \($0.name)" } ?? "All plates",
             attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
-        let pr = NSRect(x: 14, y: H - 44, width: pickerText.size().width + 24, height: 30)
+        let left = symbol("chevron.left", 11), right = symbol("chevron.right", 11), caret = symbol("chevron.up.chevron.down", 10)
+        let ts = title.size()
+        let pr = NSRect(x: 14, y: H - 44, width: 12 + left.size.width + 10 + right.size.width + 16 + ts.width + 8 + caret.size.width + 12, height: 30)
         panel(pr, dark: dark)
-        pickerText.draw(at: NSPoint(x: pr.minX + 12, y: pr.minY + 7))
+        var x = pr.minX + 12
+        for img in [left, right] {
+            img.draw(at: NSPoint(x: x, y: pr.midY - img.size.height / 2), from: .zero, operation: .sourceOver, fraction: 1)
+            x += img.size.width + 10
+        }
+        x += 6
+        title.draw(at: NSPoint(x: x, y: pr.midY - ts.height / 2))
+        x += ts.width + 8
+        caret.draw(at: NSPoint(x: x, y: pr.midY - caret.size.height / 2), from: .zero, operation: .sourceOver, fraction: 1)
         // info panel
         let lines = infoLines(plate: plate)
         let w = lines.map { $0.size().width }.max()! + 26
