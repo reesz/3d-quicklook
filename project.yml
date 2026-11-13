@@ -1,0 +1,71 @@
+name: ThreeMFPreview
+options:
+  bundleIdPrefix: local.threemfpreview
+  deploymentTarget: { macOS: "13.0" }
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: NO
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+x-types: &types
+  QLSupportedContentTypes: [org.3mf.3mf, dyn.ah62d4rv4ge8xg5pg]
+targets:
+  ThreeMFPreview:
+    type: application
+    platform: macOS
+    sources: [App, Shared/Settings.swift]
+    dependencies:
+      - target: PreviewExtension
+      - target: ThumbnailExtension
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: local.threemfpreview.app
+      CODE_SIGN_ENTITLEMENTS: Shared/Sandbox.entitlements
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: 3MF Preview
+        LSApplicationCategoryType: public.app-category.utilities
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: org.3mf.3mf
+            UTTypeDescription: 3D Manufacturing Format
+            UTTypeConformsTo: [public.data, public.3d-content]
+            UTTypeTagSpecification:
+              public.filename-extension: [3mf]
+              public.mime-type: [model/3mf, application/vnd.ms-package.3dmanufacturing-3dmodel+xml]
+  PreviewExtension:
+    type: app-extension
+    platform: macOS
+    sources: [Preview, {path: Shared, excludes: ["*.entitlements"]}]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: local.threemfpreview.app.preview
+      CODE_SIGN_ENTITLEMENTS: Shared/Extension.entitlements
+    info:
+      path: Preview/Info.plist
+      properties:
+        CFBundleDisplayName: 3MF Preview
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.quicklook.preview
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewViewController
+          NSExtensionAttributes:
+            <<: *types
+            QLSupportsSearchableItems: false
+  ThumbnailExtension:
+    type: app-extension
+    platform: macOS
+    sources: [Thumbnail, {path: Shared, excludes: ["*.entitlements"]}]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: local.threemfpreview.app.thumbnail
+      CODE_SIGN_ENTITLEMENTS: Shared/Extension.entitlements
+    info:
+      path: Thumbnail/Info.plist
+      properties:
+        CFBundleDisplayName: 3MF Thumbnail
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.quicklook.thumbnail
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ThumbnailProvider
+          NSExtensionAttributes:
+            <<: *types
+            QLThumbnailMinimumDimension: 0
