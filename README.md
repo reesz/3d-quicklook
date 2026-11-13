@@ -32,6 +32,21 @@ A macOS Quick Look extension for **.3mf** 3D-printing projects. You get real 3D 
 
 ## Install
 
+### Download
+
+1. Download `ThreeMFPreview.zip` from the [latest release](https://github.com/reesz/3mf-quicklook/releases/latest) and unzip it.
+2. Move `ThreeMFPreview.app` to `~/Applications`.
+3. The build is signed ad-hoc and not notarized, so remove the quarantine flag:
+   ```bash
+   xattr -dr com.apple.quarantine ~/Applications/ThreeMFPreview.app
+   ```
+4. **Open the app once** (macOS won't launch a new app's Quick Look extensions until the app has been opened), then reset Quick Look:
+   ```bash
+   qlmanage -r
+   ```
+
+### Build from source
+
 Requirements: macOS 13+, Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 ```bash
