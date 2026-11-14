@@ -30,6 +30,18 @@ enum SceneBuilder {
         fileprivate var plateCount = 0
         private(set) var center = SIMD3<Float>(0, 0, 0)
         private(set) var stats = Stats()
+        var isEmpty: Bool { parts.isEmpty }
+
+        // G-code toolpath
+        fileprivate var toolpathElement: SCNGeometryElement?
+        fileprivate(set) var layerEnds: [Int] = []
+        var hasToolpath: Bool { toolpathElement != nil }
+        /// Show layers 0...k (k = layerEnds.count - 1 shows everything).
+        func showLayers(upTo k: Int) {
+            guard let el = toolpathElement, !layerEnds.isEmpty else { return }
+            let i = max(0, min(k, layerEnds.count - 1))
+            el.primitiveRange = NSRange(location: 0, length: layerEnds[i])
+        }
 
         var showPlate = false { didSet { rebuildFloor() } }
         var dark = false { didSet { rebuildFloor() } }
@@ -216,6 +228,8 @@ enum SceneBuilder {
             if lo.x.isFinite { result.parts.append((node, inst.rootObject, mesh.triangles.count / 3, lo, hi)) }
         }
 
+        if let tp = model.toolpath { addToolpath(tp, to: result) }
+
         world.addChildNode(result.floor)
         result.bedSize = model.info.bedSize
         result.plateCount = model.info.plateCount
@@ -236,6 +250,32 @@ enum SceneBuilder {
         scene.rootNode.addChildNode(result.camera)
         result.show(objects: nil)
         return result
+    }
+
+    private static func addToolpath(_ tp: Toolpath, to result: Result) {
+        let vsrc = SCNGeometrySource(data: tp.vertices.withUnsafeBufferPointer { Data(buffer: $0) },
+                                     semantic: .vertex, vectorCount: tp.vertices.count, usesFloatComponents: true,
+                                     componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0,
+                                     dataStride: MemoryLayout<SIMD3<Float>>.stride)
+        let csrc = SCNGeometrySource(data: tp.colors.withUnsafeBufferPointer { Data(buffer: $0) },
+                                     semantic: .color, vectorCount: tp.colors.count, usesFloatComponents: true,
+                                     componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0,
+                                     dataStride: MemoryLayout<SIMD3<Float>>.stride)
+        let idx = (0..<UInt32(tp.vertices.count)).map { $0 }
+        let el = SCNGeometryElement(data: idx.withUnsafeBufferPointer { Data(buffer: $0) }, primitiveType: .line,
+                                    primitiveCount: tp.vertices.count / 2, bytesPerIndex: 4)
+        let g = SCNGeometry(sources: [vsrc, csrc], elements: [el])
+        let m = SCNMaterial()
+        m.lightingModel = .constant
+        m.diffuse.contents = NSColor.white
+        g.materials = [m]
+        let node = SCNNode(geometry: g)
+        result.world.addChildNode(node)
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for v in tp.vertices { lo = simd_min(lo, v); hi = simd_max(hi, v) }
+        result.parts.append((node, 1, 0, lo, hi))
+        result.toolpathElement = el
+        result.layerEnds = tp.layerEnds
     }
 
     private static func makeGeometry(_ mesh: MeshData, defaultColor: Int32,

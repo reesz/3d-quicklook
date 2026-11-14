@@ -25,8 +25,8 @@ struct SettingsView: View {
                     .font(.system(size: 34, weight: .light))
                     .foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("3MF Quick Look").font(.title2.weight(.semibold))
-                    Text("Select a .3mf in Finder and press Space.")
+                    Text("3D Quick Look").font(.title2.weight(.semibold))
+                    Text("Select a 3MF, STL, OBJ, PLY, AMF or G-code file in Finder and press Space.")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()

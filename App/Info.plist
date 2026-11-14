@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>3MF Preview</string>
+	<string>3D Quick Look</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -44,6 +44,67 @@
 				<array>
 					<string>model/3mf</string>
 					<string>application/vnd.ms-package.3dmanufacturing-3dmodel+xml</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.3d-content</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Additive Manufacturing File</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.3dquicklook.amf</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>amf</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/x-amf</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>G-code</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.3dquicklook.gcode</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>gcode</string>
+					<string>gco</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>text/x-gcode</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Binary G-code</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.3dquicklook.bgcode</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>bgcode</string>
 				</array>
 			</dict>
 		</dict>

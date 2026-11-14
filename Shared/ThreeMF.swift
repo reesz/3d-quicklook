@@ -31,6 +31,24 @@ struct ModelInfo {
     var infill: String?
     var bedSize: SIMD2<Float>?    // printable area in mm
     var plateCount = 0
+    var printTime: String?        // sliced files only
+    var filamentWeight: String?
+}
+
+/// A sliced plate (from .gcode.3mf or G-code): preview image + slicer estimates, no mesh needed.
+struct SlicedPlate {
+    var name: String
+    var image: Data?
+    var seconds: Int?
+    var grams: Double?
+}
+
+enum Format {
+    static func duration(_ s: Int) -> String {
+        let h = s / 3600, m = (s % 3600) / 60
+        return h > 0 ? "\(h)h \(m)m" : m > 0 ? "\(m)m" : "\(s)s"
+    }
+    static func grams(_ g: Double) -> String { String(format: g >= 100 ? "%.0f g" : "%.1f g", g) }
 }
 
 struct ThreeMFModel {
@@ -39,6 +57,8 @@ struct ThreeMFModel {
     var thumbnail: Data?
     var plates: [Plate] = []
     var info = ModelInfo()
+    var sliced: [SlicedPlate] = []
+    var toolpath: Toolpath?
 }
 
 enum ThreeMFError: Error { case noModel }
@@ -90,6 +110,7 @@ final class ThreeMFLoader {
         model.palette = palette
         info.plateCount = plates.count
         model.plates = plates.filter { !$0.objectIDs.isEmpty }
+        loadSliceInfo(into: &model)
         model.info = info
         if includeThumbnail { model.thumbnail = findThumbnail() }
         return model
@@ -330,6 +351,43 @@ final class ThreeMFLoader {
     // MARK: - Thumbnail
 
     func embeddedThumbnail() -> Data? { findThumbnail() }
+
+    /// Bambu/Orca sliced projects: Metadata/slice_info.config + Metadata/plate_N.png.
+    private func loadSliceInfo(into model: inout ThreeMFModel) {
+        guard let data = try? zip.read("Metadata/slice_info.config") else { return }
+        var current: SlicedPlate?
+        var index = 0
+        var plates: [SlicedPlate] = []
+        XMLScanner.scan(data, onEnd: { tag in
+            if tag == "plate", var p = current {
+                p.image = try? self.zip.read("Metadata/plate_\(index).png")
+                plates.append(p)
+                current = nil
+            }
+        }) { tag, a in
+            switch tag {
+            case "plate": current = SlicedPlate(name: ""); index = plates.count + 1
+            case "metadata" where current != nil:
+                switch a.string("key") {
+                case "index": index = a.int("value") ?? index
+                case "prediction": current?.seconds = a.int("value")
+                case "weight": current?.grams = Double(a.string("value") ?? "")
+                default: break
+                }
+            default: break
+            }
+        }
+        guard !plates.isEmpty else { return }
+        // Names from model_settings plates where available
+        for i in plates.indices {
+            plates[i].name = i < self.plates.count ? self.plates[i].name : "Plate \(i + 1)"
+        }
+        model.sliced = plates
+        let secs = plates.compactMap(\.seconds).reduce(0, +)
+        let grams = plates.compactMap(\.grams).reduce(0, +)
+        if secs > 0 { info.printTime = Format.duration(secs) }
+        if grams > 0 { info.filamentWeight = Format.grams(grams) }
+    }
 
     /// <metadata name="Title">…</metadata> etc. live near the top of the root model.
     private func readModelMetadata(_ data: Data) {

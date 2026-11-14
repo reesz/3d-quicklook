@@ -1,6 +1,6 @@
-# 3MF Quick Look
+# 3D Quick Look
 
-A macOS Quick Look extension for **.3mf** 3D-printing projects. You get real 3D renders in Finder thumbnails, and pressing <kbd>Space</kbd> opens an interactive preview that understands Bambu Studio / OrcaSlicer multi-plate projects.
+A macOS Quick Look extension for 3D-printing files: **3MF, STL, OBJ, PLY, AMF, G-code and Prusa binary G-code**. You get real 3D renders in Finder thumbnails, and pressing <kbd>Space</kbd> opens an interactive preview. The preview understands Bambu Studio / OrcaSlicer multi-plate projects and draws G-code toolpaths layer by layer.
 
 ![Plate preview, dark](docs/preview-dark.png)
 
@@ -26,15 +26,32 @@ A macOS Quick Look extension for **.3mf** 3D-printing projects. You get real 3D 
 
 ## Supported files
 
-- The 3MF core spec plus the production extension (`p:path` components spread across several model files), including Zip64 packages.
-- Bambu Studio and OrcaSlicer metadata (`Metadata/model_settings.config`, `Metadata/project_settings.config`). Other slicers' 3MF files show the full model without plate data.
-- Not supported yet: per-triangle paint (`paint_color`), textures, beam lattices.
+| Format | Thumbnail | Preview |
+|---|---|---|
+| **3MF** (`.3mf`) | Embedded slicer image, or a render | 3D model with plates, colours, build plate and info |
+| **Sliced 3MF** (`.gcode.3mf`) | Embedded plate image | Model if the file includes one; otherwise the slicer's plate images, with print time and filament weight per plate |
+| **G-code** (`.gcode`, `.gco`) | Embedded thumbnail (PrusaSlicer, OrcaSlicer, Bambu Studio, Cura) | 3D toolpath coloured by feature, with a layer slider, print time, filament and printer settings |
+| **Binary G-code** (`.bgcode`) | Embedded thumbnail | Thumbnail plus print time, filament and printer settings |
+| **STL** (binary and ASCII), **OBJ**, **PLY** (ASCII and binary) | Render¹ | 3D model¹ |
+| **AMF** (plain or zipped) | Render | 3D model with material colours |
+
+¹ macOS has its own SceneKit previewer for STL, OBJ and PLY, and it takes priority over third-party extensions. To use 3D Quick Look for those files instead, turn Apple's extensions off for your user (you can undo it with `use` instead of `ignore`):
+
+```bash
+pluginkit -e ignore -i com.apple.SceneKitQLThumbnailExtension
+pluginkit -e ignore -i com.apple.SceneKitQLPreviewExtension
+qlmanage -r && qlmanage -r cache
+```
+
+3MF details: the core spec plus the production extension (`p:path` components spread across several model files), including Zip64 packages. Bambu Studio and OrcaSlicer metadata (`Metadata/model_settings.config`, `project_settings.config`, `slice_info.config`) adds plates, filament colours and estimates; other slicers' files show the whole model.
+
+Not supported yet: STEP, per-triangle paint (`paint_color`), textures, and toolpaths for `.bgcode` (its G-code is heatshrink/MeatPack-compressed).
 
 ## Install
 
 ### Download
 
-1. Download `ThreeMFPreview.zip` from the [latest release](https://github.com/reesz/3mf-quicklook/releases/latest) and unzip it.
+1. Download `ThreeMFPreview.zip` from the [latest release](https://github.com/reesz/3d-quicklook/releases/latest) and unzip it.
 2. Move `ThreeMFPreview.app` to `~/Applications`.
 3. The build is signed ad-hoc and not notarized, so remove the quarantine flag:
    ```bash
@@ -59,7 +76,7 @@ The app is signed ad-hoc ("Sign to Run Locally"), so it's meant for your own Mac
 
 ### Settings
 
-Open **3MF Preview** from `~/Applications`:
+Open **3D Quick Look** from `~/Applications`:
 
 | Setting | Default |
 |---|---|

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>3MF Preview</string>
+	<string>3D Quick Look</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -28,6 +28,12 @@
 			<array>
 				<string>org.3mf.3mf</string>
 				<string>dyn.ah62d4rv4ge8xg5pg</string>
+				<string>public.standard-tesselated-geometry-format</string>
+				<string>public.geometry-definition-format</string>
+				<string>public.polygon-file-format</string>
+				<string>org.3dquicklook.amf</string>
+				<string>org.3dquicklook.gcode</string>
+				<string>org.3dquicklook.bgcode</string>
 			</array>
 			<key>QLSupportsSearchableItems</key>
 			<false/>

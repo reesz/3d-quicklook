@@ -6,12 +6,11 @@ final class ThumbnailProvider: QLThumbnailProvider {
                                    _ handler: @escaping (QLThumbnailReply?, Error?) -> Void) {
         let size = request.maximumSize
         // Fast path: slicer-embedded preview image.
-        if let loader = try? ThreeMFLoader(url: request.fileURL),
-           let data = loader.embeddedThumbnail(), let image = NSImage(data: data) {
+        if let data = ModelLoader.embeddedThumbnail(url: request.fileURL), let image = NSImage(data: data) {
             handler(reply(image, size), nil); return
         }
         do {
-            let model = try ThreeMFLoader.load(url: request.fileURL)
+            let model = try ModelLoader.load(url: request.fileURL)
             let result = SceneBuilder.build(model)
             guard let image = SceneBuilder.snapshot(result, size: CGSize(width: size.width * request.scale,
                                                                           height: size.height * request.scale)) else {

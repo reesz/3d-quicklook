@@ -5,7 +5,7 @@ import SceneKit
 /// Keeps the last few parsed scenes around while the extension process lives,
 /// so pressing Space on the same file again is instant.
 private enum SceneCache {
-    struct Entry { let key: String; let result: SceneBuilder.Result; let plates: [Plate]; let info: ModelInfo; let fileName: String }
+    struct Entry { let key: String; let result: SceneBuilder.Result; let plates: [Plate]; let info: ModelInfo; let fileName: String; let sliced: [SlicedPlate] }
     private static var entries: [Entry] = []
     private static let lock = NSLock()
 
@@ -36,6 +36,11 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
     private var plates: [Plate] = []
     private var info = ModelInfo()
     private var fileName = ""
+    /// Sliced plates (images + estimates). Image mode = file has these but no mesh (G-code, sliced 3MF).
+    private var sliced: [SlicedPlate] = []
+    private var imageMode = false
+    private let layerSlider = NSSlider()
+    private let layerSliderBG = NSVisualEffectView()
     private let infoPanel = NSVisualEffectView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let statsLabel = NSTextField(labelWithString: "")
@@ -97,6 +102,33 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         layoutButton.translatesAutoresizingMaskIntoConstraints = false
         layoutButtonBG.addSubview(layoutButton)
         root.addSubview(layoutButtonBG)
+
+        // Layer slider for G-code toolpaths (right edge)
+        layerSliderBG.material = .hudWindow
+        layerSliderBG.blendingMode = .withinWindow
+        layerSliderBG.state = .active
+        layerSliderBG.wantsLayer = true
+        layerSliderBG.layer?.cornerRadius = 15
+        layerSliderBG.translatesAutoresizingMaskIntoConstraints = false
+        layerSliderBG.isHidden = true
+        layerSlider.isVertical = true
+        layerSlider.controlSize = .small
+        layerSlider.isContinuous = true
+        layerSlider.target = self
+        layerSlider.action = #selector(layerChanged)
+        layerSlider.toolTip = "Layers"
+        layerSlider.translatesAutoresizingMaskIntoConstraints = false
+        layerSliderBG.addSubview(layerSlider)
+        root.addSubview(layerSliderBG)
+        NSLayoutConstraint.activate([
+            layerSliderBG.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            layerSliderBG.centerYAnchor.constraint(equalTo: root.centerYAnchor),
+            layerSliderBG.widthAnchor.constraint(equalToConstant: 30),
+            layerSliderBG.heightAnchor.constraint(equalTo: root.heightAnchor, multiplier: 0.5),
+            layerSlider.centerXAnchor.constraint(equalTo: layerSliderBG.centerXAnchor),
+            layerSlider.topAnchor.constraint(equalTo: layerSliderBG.topAnchor, constant: 10),
+            layerSlider.bottomAnchor.constraint(equalTo: layerSliderBG.bottomAnchor, constant: -10),
+        ])
 
         // Model info panel (bottom-left)
         infoPanel.material = .hudWindow
@@ -165,19 +197,23 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
     func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
         let key = SceneCache.key(for: url)
         if let cached = SceneCache.get(key) {
-            info = cached.info; fileName = cached.fileName
+            info = cached.info; fileName = cached.fileName; sliced = cached.sliced
             present(cached.result, plates: cached.plates)
             handler(nil)
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let model = try ThreeMFLoader.load(url: url)
+                let model = try ModelLoader.load(url: url)
+                if model.instances.isEmpty && model.sliced.allSatisfy({ $0.image == nil }) {
+                    throw ModelLoader.LoadError.empty
+                }
                 let result = SceneBuilder.build(model)
                 SceneCache.put(.init(key: key, result: result, plates: model.plates,
-                                     info: model.info, fileName: url.lastPathComponent))
+                                     info: model.info, fileName: url.lastPathComponent, sliced: model.sliced))
                 DispatchQueue.main.async {
                     self.info = model.info
+                    self.sliced = model.sliced
                     self.fileName = url.lastPathComponent
                     self.present(result, plates: model.plates)
                     handler(nil)
@@ -196,10 +232,21 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         scnView.scene = result.scene
         applyTheme()
 
+        imageMode = result.isEmpty && !sliced.isEmpty
+        let layers = result.layerEnds.count
+        layerSliderBG.isHidden = !(result.hasToolpath && layers > 1)
+        if layers > 1 {
+            layerSlider.minValue = 1
+            layerSlider.maxValue = Double(layers)
+            layerSlider.numberOfTickMarks = 0
+            layerSlider.doubleValue = Double(layers)
+            result.showLayers(upTo: layers - 1)
+        }
+        let names = imageMode ? sliced.map(\.name) : plates.map(\.name)
         platePopup.removeAllItems()
-        if plates.count > 1 {
+        if names.count > 1 {
             platePopup.addItem(withTitle: "All plates")
-            for (i, p) in plates.enumerated() { platePopup.addItem(withTitle: "\(i + 1). \(p.name)") }
+            for (i, n) in names.enumerated() { platePopup.addItem(withTitle: "\(i + 1). \(n)") }
             picker?.isHidden = false
         } else {
             picker?.isHidden = true
@@ -218,17 +265,43 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
     private func select(_ i: Int) {
         guard let result else { return }
         if platePopup.numberOfItems > i { platePopup.selectItem(at: i) }
+        if imageMode { return selectImage(i) }
         let plate = i <= 0 || i > plates.count ? nil : plates[i - 1]
         result.show(objects: plate?.objectIDs, plate: plate?.index)
         scnView.pointOfView = result.camera
         scnView.defaultCameraController.target = SCNVector3(result.center)
         updateInfo(plate: plate)
 
+        gridView.onSelect = { [weak self] k in self?.select(k + 1) }
         let showGrid = plate == nil && plates.count > 1 && allPlatesLayout == .grid
         updateLayoutButton()
         gridView.isHidden = !showGrid
         scnView.isHidden = showGrid
         if showGrid { renderTiles() } else { renderGeneration += 1 }
+    }
+
+    /// Sliced files without a mesh: show the slicer's plate renders.
+    private func selectImage(_ i: Int) {
+        renderGeneration += 1
+        layoutButtonBG.isHidden = true
+        scnView.isHidden = true
+        gridView.isHidden = false
+        let shown = i <= 0 || i > sliced.count ? Array(sliced.indices) : [i - 1]
+        gridView.setPlates(shown.map { sliced.count > 1 ? "\($0 + 1). \(sliced[$0].name)" : sliced[$0].name })
+        for (k, idx) in shown.enumerated() {
+            gridView.tiles[k].setImage(sliced[idx].image.flatMap(NSImage.init(data:)))
+        }
+        gridView.onSelect = { [weak self] k in
+            guard let self, shown.count > 1 else { return }
+            self.select(shown[k] + 1)
+        }
+        updateInfo(plate: nil)
+    }
+
+    @objc private func layerChanged() {
+        guard let result else { return }
+        result.showLayers(upTo: Int(layerSlider.doubleValue.rounded()) - 1)
+        updateInfo(plate: currentPlate)
     }
 
     @objc private func toggleLayout() {
@@ -330,8 +403,38 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         return i <= 0 || i > plates.count ? nil : plates[i - 1]
     }
 
+    /// Slicer estimates for the selected plate (or the whole project).
+    private func estimateItems(slicedIndex: Int?) -> [InfoLine.Item] {
+        var time = info.printTime, weight = info.filamentWeight
+        if let i = slicedIndex, i < sliced.count {
+            time = sliced[i].seconds.map(Format.duration) ?? time
+            weight = sliced[i].grams.map(Format.grams) ?? weight
+        }
+        var out: [InfoLine.Item] = []
+        if let time { out.append(.init(icon: .symbol("clock"), text: time, help: "Estimated print time")) }
+        if let weight { out.append(.init(icon: .symbol("scalemass"), text: weight, help: "Filament weight")) }
+        return out
+    }
+
     private func updateInfo(plate: Plate?) {
         guard let result else { return }
+        if imageMode {
+            var title = info.title ?? (fileName as NSString).deletingPathExtension
+            if let d = info.designer { title += " by \(d)" }
+            titleLabel.stringValue = title
+            let i = platePopup.indexOfSelectedItem
+            let idx = sliced.count == 1 ? 0 : (i > 0 ? i - 1 : nil)
+            var stats: [InfoLine.Item] = []
+            if let idx, sliced.count > 1 { stats.append(.init(icon: .symbol("square.on.square"), text: sliced[idx].name, help: "Plate")) }
+            stats += estimateItems(slicedIndex: idx)
+            statsLabel.attributedStringValue = InfoLine.make(stats, monospacedDigits: true)
+            statsLabel.isHidden = stats.isEmpty
+            printLabel.attributedStringValue = InfoLine.make(printItems(), monospacedDigits: false)
+            printLabel.isHidden = printLabel.stringValue.isEmpty
+            fitLabels()
+            return
+        }
+        statsLabel.isHidden = false
         var title = info.title ?? (fileName as NSString).deletingPathExtension
         if let d = info.designer { title += " by \(d)" }
         titleLabel.stringValue = title
@@ -342,13 +445,26 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
             : st.triangles >= 1_000 ? String(format: "%.1fK", Double(st.triangles) / 1e3) : "\(st.triangles)"
         var stats: [InfoLine.Item] = []
         if let plate { stats.append(.init(icon: .symbol("square.on.square"), text: plate.name, help: "Plate")) }
-        stats.append(.init(icon: .symbol("triangle"), text: tris, help: "Triangles"))
-        stats.append(.init(icon: .symbol("cube"), text: "\(st.objects)", help: "Objects"))
+        if result.hasToolpath {
+            let n = result.layerEnds.count
+            let k = layerSliderBG.isHidden ? n : Int(layerSlider.doubleValue.rounded())
+            stats.append(.init(icon: .symbol("square.3.layers.3d.down.right"), text: k == n ? "\(n) layers" : "Layer \(k) / \(n)", help: "Layers"))
+        } else {
+            stats.append(.init(icon: .symbol("triangle"), text: tris, help: "Triangles"))
+            stats.append(.init(icon: .symbol("cube"), text: "\(st.objects)", help: "Objects"))
+        }
         stats.append(.init(icon: .symbol("ruler"),
                            text: String(format: "%.1f × %.1f × %.1f mm", st.size.x, st.size.y, st.size.z),
                            help: "Size (W × D × H)"))
+        stats += estimateItems(slicedIndex: plate.map(\.index))
         statsLabel.attributedStringValue = InfoLine.make(stats, monospacedDigits: true)
 
+        let print = printItems()
+        printLabel.attributedStringValue = InfoLine.make(print, monospacedDigits: false)
+        printLabel.isHidden = print.isEmpty
+    }
+
+    private func printItems() -> [InfoLine.Item] {
         var print: [InfoLine.Item] = []
         if let p = info.printer { print.append(.init(icon: InfoLine.printerIcon(p), text: p, help: "Printer")) }
         if let n = info.nozzle { print.append(.init(icon: .custom(InfoLine.nozzle), text: n, help: "Nozzle")) }
@@ -357,7 +473,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
             print.append(.init(icon: .custom(InfoLine.spool), text: info.filaments.prefix(3).joined(separator: ", "), help: "Filament"))
         }
         if let f = info.infill { print.append(.init(icon: .symbol("square.grid.3x3"), text: f, help: "Sparse infill")) }
-        printLabel.attributedStringValue = InfoLine.make(print, monospacedDigits: false)
-        printLabel.isHidden = print.isEmpty
+        return print
     }
 }

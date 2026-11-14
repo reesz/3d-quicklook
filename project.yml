@@ -11,7 +11,15 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
 x-types: &types
-  QLSupportedContentTypes: [org.3mf.3mf, dyn.ah62d4rv4ge8xg5pg]
+  QLSupportedContentTypes:
+    - org.3mf.3mf
+    - dyn.ah62d4rv4ge8xg5pg
+    - public.standard-tesselated-geometry-format
+    - public.geometry-definition-format
+    - public.polygon-file-format
+    - org.3dquicklook.amf
+    - org.3dquicklook.gcode
+    - org.3dquicklook.bgcode
 targets:
   ThreeMFPreview:
     type: application
@@ -26,7 +34,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: 3MF Preview
+        CFBundleDisplayName: 3D Quick Look
         LSApplicationCategoryType: public.app-category.utilities
         UTImportedTypeDeclarations:
           - UTTypeIdentifier: org.3mf.3mf
@@ -35,6 +43,23 @@ targets:
             UTTypeTagSpecification:
               public.filename-extension: [3mf]
               public.mime-type: [model/3mf, application/vnd.ms-package.3dmanufacturing-3dmodel+xml]
+          - UTTypeIdentifier: org.3dquicklook.amf
+            UTTypeDescription: Additive Manufacturing File
+            UTTypeConformsTo: [public.data, public.3d-content]
+            UTTypeTagSpecification:
+              public.filename-extension: [amf]
+              public.mime-type: [application/x-amf]
+          - UTTypeIdentifier: org.3dquicklook.gcode
+            UTTypeDescription: G-code
+            UTTypeConformsTo: [public.plain-text]
+            UTTypeTagSpecification:
+              public.filename-extension: [gcode, gco]
+              public.mime-type: [text/x-gcode]
+          - UTTypeIdentifier: org.3dquicklook.bgcode
+            UTTypeDescription: Binary G-code
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [bgcode]
   PreviewExtension:
     type: app-extension
     platform: macOS
@@ -45,7 +70,7 @@ targets:
     info:
       path: Preview/Info.plist
       properties:
-        CFBundleDisplayName: 3MF Preview
+        CFBundleDisplayName: 3D Quick Look
         NSExtension:
           NSExtensionPointIdentifier: com.apple.quicklook.preview
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewViewController
